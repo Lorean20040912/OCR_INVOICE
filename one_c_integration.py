@@ -46,6 +46,17 @@ class OneCIntegration:
 
     def _format_for_1c(self, invoice_data):
         """Formatează datele pentru API-ul 1C - adaptat pentru Moldova"""
+        # Convertește valorile numerice la float, handle None
+        try:
+            total_amount = float(invoice_data.get('total_amount', 0) or 0)
+        except (ValueError, TypeError):
+            total_amount = 0.0
+
+        try:
+            vat_amount = float(invoice_data.get('vat_amount', 0) or 0)
+        except (ValueError, TypeError):
+            vat_amount = 0.0
+
         return {
             'Номер': invoice_data.get('invoice_number'),
             'Дата': invoice_data.get('invoice_date'),
@@ -53,9 +64,9 @@ class OneCIntegration:
                 'Наименование': invoice_data.get('contractor'),
                 'IDNO': invoice_data.get('idno')  # IDNO pentru Moldova
             },
-            'СуммаДокумента': float(invoice_data.get('total_amount', 0)),
+            'СуммаДокумента': total_amount,
             'ДатаПоставки': invoice_data.get('delivery_date'),
-            'НДС': float(invoice_data.get('vat_amount', 0))
+            'НДС': vat_amount
         }
 
     def verify_connection(self):

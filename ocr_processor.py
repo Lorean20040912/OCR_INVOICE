@@ -17,7 +17,9 @@ class OCRProcessor:
         try:
             # Convertește PDF în imagine dacă este necesar
             if file_path.lower().endswith('.pdf'):
-                poppler_path = r'Release-25.12.0-0\poppler-25.12.0\Library\bin'
+                import os
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+                poppler_path = os.path.join(base_dir, 'Release-25.12.0-0', 'poppler-25.12.0', 'Library', 'bin')
                 images = convert_from_path(file_path, first_page=1, last_page=1, poppler_path=poppler_path)
                 image = images[0]
 
