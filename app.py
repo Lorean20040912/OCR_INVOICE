@@ -33,10 +33,15 @@ def allowed_file(filename):
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
     """Primește și procesează fișierele încărcate"""
+    logger.info("Upload request received")
+
     if 'files' not in request.files:
+        logger.error("No files in request")
         return jsonify({'error': 'Nu au fost găsite fișiere'}), 400
 
     files = request.files.getlist('files')
+    logger.info(f"Received {len(files)} files")
+
     processed_invoices = []
 
     for file in files:
@@ -47,9 +52,24 @@ def upload_files():
                 unique_filename = f"{uuid.uuid4()}_{filename}"
                 filepath = os.path.join(Config.UPLOAD_FOLDER, unique_filename)
                 file.save(filepath)
+                logger.info(f"File saved: {filepath}")
 
                 # Procesează cu OCR
-                invoice_data = ocr_processor.process_invoice(filepath)
+                try:
+                    invoice_data = ocr_processor.process_invoice(filepath)
+                except Exception as ocr_error:
+                    logger.error(f"OCR error for {filename}: {str(ocr_error)}")
+                    # Returnează date goale dacă OCR eșuează
+                    invoice_data = {
+                        'invoice_number': None,
+                        'invoice_date': None,
+                        'contractor': None,
+                        'idno': None,
+                        'total_amount': None,
+                        'delivery_date': None,
+                        'vat_amount': None,
+                        'confidence': 0.0
+                    }
 
                 if invoice_data:
                     invoice_data['file_path'] = filepath
@@ -57,13 +77,17 @@ def upload_files():
                     invoice_data['status'] = 'pending'
                     invoice_data['unique_id'] = str(uuid.uuid4())
                     processed_invoices.append(invoice_data)
+                    logger.info(f"Invoice processed: {filename}")
                 else:
                     logger.warning(f"Nu s-au putut extrage date din {filename}")
 
             except Exception as e:
                 logger.error(f"Eroare la procesarea {filename}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
                 continue
 
+    logger.info(f"Processed {len(processed_invoices)} invoices")
     return jsonify({
         'success': True,
         'invoices': processed_invoices
