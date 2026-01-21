@@ -1,0 +1,170 @@
+╔════════════════════════════════════════════════════════════════╗
+║          OCR INVOICE PROCESSOR - USAGE GUIDE                    ║
+║                                                                  ║
+║  Author: GitHub Copilot                                         ║
+║  System: Tesseract 5.5.0 + Python 3.14 + OpenCV                 ║
+║  Language: Romanian                                              ║
+╚════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════
+
+1. QUICK START - Process Single Invoice:
+
+   .\.venv\Scripts\python.exe ocr_simple.py <image_path>
+   
+   Example:
+   .\.venv\Scripts\python.exe ocr_simple.py test_invoices\your_invoice.jpg
+   
+   Output:
+   - Extracted text
+   - Invoice number
+   - Date (first date only)
+   - Total amount
+   - Contractor name
+
+═══════════════════════════════════════════════════════════════════
+
+2. BATCH PROCESS - All Invoices:
+
+   .\.venv\Scripts\python.exe ocr_batch.py
+   
+   Output:
+   - ocr_report.json (all results)
+   - Summary statistics
+   - Success rate
+
+═══════════════════════════════════════════════════════════════════
+
+3. WHAT INVOICE FIELDS ARE EXTRACTED:
+
+   ✓ Invoice Number    (aax5062751, 22x5082751, etc)
+   ✓ Date              (First date: 21.01.2026)
+   ✓ Total Amount      (592.82 lei)
+   ✓ Contractor        (T.D GROUP)
+
+═══════════════════════════════════════════════════════════════════
+
+4. HOW TO PREPARE INVOICES FOR OCR:
+
+   Best results:
+   ✓ Clear, sharp images
+   ✓ Good lighting
+   ✓ Black text on white background
+   ✓ Minimal skew/rotation
+   ✓ High resolution (1500x2000+ pixels)
+   
+   Avoid:
+   ✗ Blurry images
+   ✗ Poor lighting
+   ✗ Faded text
+   ✗ Colored backgrounds
+   ✗ Wrinkled paper
+
+═══════════════════════════════════════════════════════════════════
+
+5. DIRECTORY STRUCTURE:
+
+   OCR_INVOICE/
+   ├── ocr_simple.py          (Single invoice processing)
+   ├── ocr_batch.py           (Batch processing)
+   ├── ocr_report.json        (Report output)
+   ├── test_invoices/
+   │   ├── user_data/         (Your invoices here)
+   │   │   └── invoice_*.jpg
+   │   └── test_generated/    (Generated test invoices)
+   └── debug_ocr/             (Debug images from ocr_debug.py)
+
+═══════════════════════════════════════════════════════════════════
+
+6. EXTRACTION PATTERNS (What the system looks for):
+
+   Invoice Number:
+   - Alphanumeric codes: aax5062751, 22x5082751, INV-2026-001
+   - 8+ character codes with letters and numbers
+   
+   Date:
+   - Format: DD.MM.YYYY or DD/MM/YYYY
+   - Years: 2024, 2025, 2026, 2027
+   - FIRST date only (ignores secondary dates)
+   
+   Amount:
+   - Format: 592.82 lei or 592,82 lei
+   - Looks for "TOTAL FACTURA" or "TOTAL" prefix
+   - Prefers amounts > 100 (to avoid small values)
+   
+   Contractor:
+   - Company names
+   - Patterns: "T.D GROUP", "SRL", "SA", etc
+   - Found in "Contractor:" or "Contactor:" lines
+
+═══════════════════════════════════════════════════════════════════
+
+7. TROUBLESHOOTING:
+
+   Problem: Date not extracted
+   Solution: Ensure date format is DD.MM.YYYY (with dots)
+            Check that year is 2024-2027
+            Make sure it's the FIRST date on invoice
+   
+   Problem: Amount not extracted
+   Solution: Ensure format is 592.82 (with point, not comma)
+            Make sure line says "TOTAL FACTURA:" or "TOTAL:"
+            Amount should be > 100 lei
+   
+   Problem: Invoice number wrong
+   Solution: Must be alphanumeric (letters + numbers)
+            Must be at least 8 characters
+            Example: aax5062751 (not INV-2026-001 format)
+   
+   Problem: Text garbled
+   Solution: Image quality is too low
+            Use high-resolution images (1500x2000+)
+            Ensure clear, sharp text
+            Good lighting recommended
+
+═══════════════════════════════════════════════════════════════════
+
+8. SUPPORTED FILE FORMATS:
+
+   ✓ .jpg / .jpeg
+   ✓ .png
+   
+   Image size: 600x800 minimum, 2000x3000 recommended
+
+═══════════════════════════════════════════════════════════════════
+
+9. OUTPUT FORMAT (ocr_report.json):
+
+   {
+     "timestamp": "2026-01-21T15:54:58.439938",
+     "total_processed": 5,
+     "successful": 5,
+     "results": [
+       {
+         "path": "test_invoices/user_data/invoice.jpg",
+         "invoice_number": "aax5062751",
+         "date": "21.01.2026",
+         "contractor": "T.D GROUP",
+         "amount": "592.82",
+         "raw_text": "..."
+       }
+     ]
+   }
+
+═══════════════════════════════════════════════════════════════════
+
+10. NEXT STEPS:
+
+    1. Place your invoice images in: test_invoices/user_data/
+    
+    2. Run batch processing:
+       .\.venv\Scripts\python.exe ocr_batch.py
+    
+    3. Check results in: ocr_report.json
+    
+    4. If results are not good:
+       - Try higher quality images
+       - Ensure invoice format matches expected patterns
+       - Check for OCR errors in raw_text field
+
+═══════════════════════════════════════════════════════════════════

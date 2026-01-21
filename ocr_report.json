@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-01-21T15:54:58.439938",
+  "total_processed": 5,
+  "successful": 5,
+  "results": [
+    {
+      "invoice_number": null,
+      "date": null,
+      "contractor": null,
+      "amount": null,
+      "path": "test_invoices/excellent_quality\\viber_image_2026-01-12_14-35-14-817.jpg",
+      "raw_text": "«PETE Ti Aaaa IE eee izmene e EET\n: na ate ERIE -\n:\n| RE oEaaeeiaa aa a Ea a ae ă RRR E  a\n..——— SS 2553 :\n| e E RR E PE E EA E Ra E PE E că\nREZ EZRA RE E E NE IE PRE IE E NI 3\nPEPE:\nPETE E PIERE FER\nPE PEPE\nA Es E a a E a IE a E a E IE E Ei E E\n|IREBE2EEEAER ARA  MEER EIREA I ERE ER I I E I E:\nEI PEPE PEEL FREE:\nPS PPP PER RI\n| RE RER Ea E NE RE a EEE Da E a a Ea PN\nIRENE E RC E ÎNC CE ÎN A ME MIR Ea Ea Ea Ea ARN\n| E E E DEEE Ea IEI Ea IE RE IE E Ea a\nE RACE ARE E a IE IER RER za IEI EEE E Ea E a PRE\nPT E E PIPI CREEA.\n|N E CR INC BEI MEI EEE E Ba Ea PN\nE EPOPEEA:\nE cd\nEEE ee E a E ae aa ME Me ae == e IRA\n"
+    },
+    {
+      "invoice_number": null,
+      "date": null,
+      "contractor": null,
+      "amount": null,
+      "path": "test_invoices/good_quality\\your_invoice.jpg.jpg",
+      "raw_text": "«PETE Ti Aaaa IE eee izmene e EET\n: na ate ERIE -\n:\n| RE oEaaeeiaa aa a Ea a ae ă RRR E  a\n..——— SS 2553 :\n| e E RR E PE E EA E Ra E PE E că\nREZ EZRA RE E E NE IE PRE IE E NI 3\nPEPE:\nPETE E PIERE FER\nPE PEPE\nA Es E a a E a IE a E a E IE E Ei E E\n|IREBE2EEEAER ARA  MEER EIREA I ERE ER I I E I E:\nEI PEPE PEEL FREE:\nPS PPP PER RI\n| RE RER Ea E NE RE a EEE Da E a a Ea PN\nIRENE E RC E ÎNC CE ÎN A ME MIR Ea Ea Ea Ea ARN\n| E E E DEEE Ea IEI Ea IE RE IE E Ea a\nE RACE ARE E a IE IER RER za IEI EEE E Ea E a PRE\nPT E E PIPI CREEA.\n|N E CR INC BEI MEI EEE E Ba Ea PN\nE EPOPEEA:\nE cd\nEEE ee E a E ae aa ME Me ae == e IRA\n"
+    },
+    {
+      "invoice_number": null,
+      "date": null,
+      "contractor": null,
+      "amount": null,
+      "path": "test_invoices/poor_quality\\viber_image_2026-01-12_14-35-14-817.jpg",
+      "raw_text": "«PETE Ti Aaaa IE eee izmene e EET\n: na ate ERIE -\n:\n| RE oEaaeeiaa aa a Ea a ae ă RRR E  a\n..——— SS 2553 :\n| e E RR E PE E EA E Ra E PE E că\nREZ EZRA RE E E NE IE PRE IE E NI 3\nPEPE:\nPETE E PIERE FER\nPE PEPE\nA Es E a a E a IE a E a E IE E Ei E E\n|IREBE2EEEAER ARA  MEER EIREA I ERE ER I I E I E:\nEI PEPE PEEL FREE:\nPS PPP PER RI\n| RE RER Ea E NE RE a EEE Da E a a Ea PN\nIRENE E RC E ÎNC CE ÎN A ME MIR Ea Ea Ea Ea ARN\n| E E E DEEE Ea IEI Ea IE RE IE E Ea a\nE RACE ARE E a IE IER RER za IEI EEE E Ea E a PRE\nPT E E PIPI CREEA.\n|N E CR INC BEI MEI EEE E Ba Ea PN\nE EPOPEEA:\nE cd\nEEE ee E a E ae aa ME Me ae == e IRA\n"
+    },
+    {
+      "invoice_number": null,
+      "date": null,
+      "contractor": null,
+      "amount": null,
+      "path": "test_invoices/very_poor_quality\\viber_image_2026-01-12_14-35-14-817.jpg",
+      "raw_text": "«PETE Ti Aaaa IE eee izmene e EET\n: na ate ERIE -\n:\n| RE oEaaeeiaa aa a Ea a ae ă RRR E  a\n..——— SS 2553 :\n| e E RR E PE E EA E Ra E PE E că\nREZ EZRA RE E E NE IE PRE IE E NI 3\nPEPE:\nPETE E PIERE FER\nPE PEPE\nA Es E a a E a IE a E a E IE E Ei E E\n|IREBE2EEEAER ARA  MEER EIREA I ERE ER I I E I E:\nEI PEPE PEEL FREE:\nPS PPP PER RI\n| RE RER Ea E NE RE a EEE Da E a a Ea PN\nIRENE E RC E ÎNC CE ÎN A ME MIR Ea Ea Ea Ea ARN\n| E E E DEEE Ea IEI Ea IE RE IE E Ea a\nE RACE ARE E a IE IER RER za IEI EEE E Ea E a PRE\nPT E E PIPI CREEA.\n|N E CR INC BEI MEI EEE E Ba Ea PN\nE EPOPEEA:\nE cd\nEEE ee E a E ae aa ME Me ae == e IRA\n"
+    },
+    {
+      "invoice_number": "INV-2026-001",
+      "date": "21.01.2026",
+      "contractor": null,
+      "amount": "0.90",
+      "path": "test_invoices/test_generated\\invoice_test.jpg",
+      "raw_text": "S.C. EXAMPLE COMPANY S.RL.\n\nAdresa: Str. Test, nr. 123, Bucuresti\n\nCUI: RO12345678\n\nNumar Factura: INV-2026-001\n\nData Facturi: 21.01.2026\n\nData Scadentei: 31.01.2026\n\nDescriere Cantitate Pret Unitar Total\n\nServicii de consultanta 2 500.90 1000.90\n\nSonware license 1 250.00 250.90\nSubtotal: 1250.00\nTVA (19%) 237.50\n\nContractor: Client Example SRL\n\nBank Details: Banca Example, IBAN RO12 EXMP-0000 0000 0000 0000\n"
+    }
+  ]
+}
