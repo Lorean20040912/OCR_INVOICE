@@ -1,6 +1,10 @@
 # app.py (versiune completă cu toate metodele de export)
 from flask import Flask, request, jsonify, send_from_directory, send_file
-from flask_cors import CORS
+try:
+    from flask_cors import CORS
+except Exception:
+    def CORS(app, *args, **kwargs):
+        return app
 from werkzeug.utils import secure_filename
 import os
 import uuid
@@ -17,6 +21,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 app.config.from_object(Config)
+
+# Configurează Azure OCR (dacă nu e deja în env)
+os.environ.setdefault('AZURE_VISION_ENDPOINT', 'https://facturi-ocr.cognitiveservices.azure.com/')
+os.environ.setdefault('AZURE_VISION_KEY', '6tRq5nqi1FsTCF21SCxsuIdJwbTnF7IEY6CvmkKAyDSNZfwYktAQJQQJ99CEAC5RqLJXJ3w3AAALACOGnp2i')
 
 # Inițializare servicii
 ocr_processor = OCRProcessor()
@@ -54,12 +62,13 @@ def upload_files():
                 file.save(filepath)
                 logger.info(f"File saved: {filepath}")
 
-                # Procesează cu OCR
+                # Procesează cu OCR (prioritar Azure Document Intelligence, apoi fallback la OCR existent)
                 try:
-                    invoice_data = ocr_processor.process_invoice(filepath)
+                    invoice_data = analyze_invoice_via_azure_di(filepath)
+                    if not invoice_data:
+                        invoice_data = ocr_processor.process_invoice(filepath)
                 except Exception as ocr_error:
                     logger.error(f"OCR error for {filename}: {str(ocr_error)}")
-                    # Returnează date goale dacă OCR eșuează
                     invoice_data = {
                         'invoice_number': None,
                         'invoice_date': None,
@@ -205,6 +214,144 @@ def test_1c_connection():
 def download_export(filename):
     """Descarcă fișier exportat"""
     return send_from_directory(export_handler.export_folder, filename)
+
+def analyze_invoice_via_azure_di(file_path: str):
+    """
+    Analizează factura folosind Azure Document Intelligence (prebuilt-invoice) via REST.
+    Returnează dict cu câmpurile standard sau None dacă nu poate analiza.
+    """
+    try:
+        import os, time, requests
+        endpoint = os.environ.get('AZURE_DOCUMENTINTELLIGENCE_ENDPOINT') or os.environ.get('AZURE_VISION_ENDPOINT')
+        key = os.environ.get('AZURE_DOCUMENTINTELLIGENCE_KEY') or os.environ.get('AZURE_VISION_KEY')
+        if not endpoint or not key or not os.path.isfile(file_path):
+            return None
+
+        url = endpoint.rstrip('/') + '/formrecognizer/documentModels/prebuilt-invoice:analyze?api-version=2023-07-31'
+        with open(file_path, 'rb') as f:
+            data = f.read()
+
+        headers = {
+            'Ocp-Apim-Subscription-Key': key,
+            'Content-Type': 'application/octet-stream',
+        }
+        r = requests.post(url, headers=headers, data=data, timeout=45)
+        if r.status_code not in (200, 202):
+            logger.warning(f"Azure DI analyze POST status {r.status_code}: {r.text[:200]}")
+            return None
+
+        op_loc = r.headers.get('Operation-Location') or r.headers.get('operation-location')
+        result = None
+        if op_loc:
+            deadline = time.time() + 75
+            while time.time() < deadline:
+                g = requests.get(op_loc, headers={'Ocp-Apim-Subscription-Key': key}, timeout=45)
+                jr = {}
+                try:
+                    jr = g.json()
+                except Exception:
+                    pass
+                status = (jr.get('status') or '').lower()
+                if status == 'succeeded':
+                    result = jr
+                    break
+                if status == 'failed':
+                    logger.warning(f"Azure DI analyze failed: {jr}")
+                    return None
+                time.sleep(1.2)
+        else:
+            # Uneori răspunsul vine direct
+            try:
+                result = r.json()
+            except Exception:
+                result = None
+
+        if not result:
+            return None
+
+        analyze = result.get('analyzeResult') or {}
+        docs = analyze.get('documents') or []
+        if not docs:
+            return None
+        doc = docs[0]
+        fields = doc.get('fields') or {}
+
+        def _get_str(name):
+            f = fields.get(name) or {}
+            return f.get('valueString') or f.get('content')
+
+        def _get_date(name):
+            f = fields.get(name) or {}
+            return f.get('valueDate') or f.get('content')
+
+        def _get_curr_amount(name):
+            f = fields.get(name) or {}
+            cur = f.get('valueCurrency') or {}
+            return cur.get('amount')
+
+        def _conf(name):
+            f = fields.get(name) or {}
+            return f.get('confidence')
+
+        invoice_number = _get_str('InvoiceId')
+        invoice_date = _get_date('InvoiceDate')
+        contractor = _get_str('VendorName') or _get_str('CustomerName')
+        idno = _get_str('VendorTaxId') or _get_str('CustomerId') or _get_str('VendorId')
+        total_amount = _get_curr_amount('InvoiceTotal')
+        vat_amount = _get_curr_amount('TotalTax')
+
+        confidences = list(filter(lambda x: x is not None, [
+            _conf('InvoiceId'), _conf('InvoiceDate'), _conf('VendorName'),
+            _conf('VendorTaxId'), _conf('CustomerId'), _conf('InvoiceTotal'), _conf('TotalTax')
+        ]))
+        confidence = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
+
+        return {
+            'invoice_number': invoice_number,
+            'invoice_date': invoice_date,
+            'contractor': contractor,
+            'idno': idno,
+            'total_amount': total_amount,
+            'delivery_date': None,
+            'vat_amount': vat_amount,
+            'confidence': confidence
+        }
+    except Exception as e:
+        logger.error(f"Azure DI exception: {str(e)}")
+        return None
+
+@app.route('/api/reprocess', methods=['POST'])
+def reprocess_ocr():
+    """
+    Reprocesează OCR pentru un fișier deja încărcat pe server.
+    Acceptă:
+      - file_path: calea completă către fișier (dacă este cunoscută)
+      - server_filename: numele fișierului din folderul UPLOAD_FOLDER
+    """
+    try:
+        data = request.json or {}
+        file_path = data.get('file_path')
+        server_filename = data.get('server_filename')
+
+        if not file_path and server_filename:
+            file_path = os.path.join(Config.UPLOAD_FOLDER, server_filename)
+
+        if not file_path or not os.path.isfile(file_path):
+            return jsonify({'success': False, 'error': 'Fișierul nu există pe server'}), 400
+
+        invoice_data = analyze_invoice_via_azure_di(file_path)
+        if not invoice_data:
+            invoice_data = ocr_processor.process_invoice(file_path) or {}
+
+        invoice_data['file_path'] = file_path
+        invoice_data['server_filename'] = os.path.basename(file_path)
+        invoice_data['status'] = invoice_data.get('status') or 'pending'
+        invoice_data['unique_id'] = data.get('unique_id') or str(uuid.uuid4())
+
+        return jsonify({'success': True, 'invoice': invoice_data})
+    except Exception as e:
+        logger.error(f"Reprocess OCR error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -85,53 +85,68 @@ class OCRProcessor:
             return ""
 
     def _azure_read(self, file_path: str) -> str:
-        if not (self.azure_endpoint and self.azure_key):
+        # Importuri locale pentru a evita erori dacă nu sunt la nivel de modul
+        from urllib import request as _urlreq
+        import json as _json
+        import time as _time
+        import os
+
+        # Citește credențiale din obiect sau din variabilele de mediu
+        endpoint = getattr(self, "azure_endpoint", None) or os.environ.get("AZURE_VISION_ENDPOINT")
+        key = getattr(self, "azure_key", None) or os.environ.get("AZURE_VISION_KEY")
+        if not (endpoint and key):
             return ""
 
-        url = self.azure_endpoint.rstrip("/") + "/vision/v3.2/read/analyze"
+        url = endpoint.rstrip("/") + "/vision/v3.2/read/analyze"
         with open(file_path, "rb") as f:
             data = f.read()
 
-        req = urllib.request.Request(
+        req = _urlreq.Request(
             url,
             data=data,
             method="POST",
             headers={
-                "Ocp-Apim-Subscription-Key": self.azure_key,
+                "Ocp-Apim-Subscription-Key": key,
                 "Content-Type": "application/octet-stream",
             },
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            op_loc = resp.headers.get("Operation-Location") or resp.headers.get("operation-location")
+        try:
+            with _urlreq.urlopen(req, timeout=30) as resp:
+                op_loc = resp.headers.get("Operation-Location") or resp.headers.get("operation-location")
+        except Exception:
+            return ""
 
         if not op_loc:
             return ""
 
-        deadline = time.time() + 60
+        deadline = _time.time() + 60
         status = "running"
         last_payload = None
-        while time.time() < deadline and status in ("running", "notstarted", "notStarted"):
-            time.sleep(1.0)
-            get_req = urllib.request.Request(
+        while _time.time() < deadline and status in ("running", "notstarted", "notStarted"):
+            _time.sleep(1.0)
+            get_req = _urlreq.Request(
                 op_loc,
-                headers={"Ocp-Apim-Subscription-Key": self.azure_key},
+                headers={"Ocp-Apim-Subscription-Key": key},
                 method="GET",
             )
-            with urllib.request.urlopen(get_req, timeout=30) as g:
-                last_payload = json.loads(g.read().decode("utf-8"))
+            try:
+                with _urlreq.urlopen(get_req, timeout=30) as g:
+                    last_payload = _json.loads(g.read().decode("utf-8"))
+            except Exception:
+                break
             status = (last_payload.get("status") or "").lower()
             if status == "succeeded":
                 analyze = last_payload.get("analyzeResult", {}) or {}
                 if isinstance(analyze.get("content"), str):
                     return analyze["content"]
                 lines_out = []
-                for page in analyze.get("readResults", []):
-                    for line in page.get("lines", []):
+                for page in (analyze.get("readResults") or []):
+                    for line in (page.get("lines") or []):
                         txt = line.get("text")
                         if txt:
                             lines_out.append(txt)
-                for page in analyze.get("pages", []):
-                    for line in page.get("lines", []):
+                for page in (analyze.get("pages") or []):
+                    for line in (page.get("lines") or []):
                         txt = line.get("content") or line.get("text")
                         if txt:
                             lines_out.append(txt)

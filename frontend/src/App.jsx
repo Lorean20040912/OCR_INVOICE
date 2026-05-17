@@ -62,7 +62,6 @@ function App() {
 
   const handleApprove = async () => {
     const currentInvoice = invoices[currentIndex];
-import React, { useRef, useState } from "react";
 
 const API_BASE = "http://localhost:5000";
 
