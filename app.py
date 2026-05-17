@@ -9,7 +9,6 @@ from werkzeug.utils import secure_filename
 import os
 import uuid
 from ocr_processor import OCRProcessor
-from one_c_integration import OneCIntegration
 from export_handler_clean import ExportHandler
 from config import Config
 import logging
@@ -28,7 +27,6 @@ os.environ.setdefault('AZURE_VISION_KEY', '6tRq5nqi1FsTCF21SCxsuIdJwbTnF7IEY6Cvm
 
 # Inițializare servicii
 ocr_processor = OCRProcessor()
-one_c = OneCIntegration()
 export_handler = ExportHandler()
 
 # Creează directoare
@@ -75,7 +73,6 @@ def upload_files():
                         'contractor': None,
                         'idno': None,
                         'total_amount': None,
-                        'delivery_date': None,
                         'vat_amount': None,
                         'confidence': 0.0
                     }
@@ -106,70 +103,6 @@ def upload_files():
         'invoices': processed_invoices
     })
 
-@app.route('/api/send-to-1c', methods=['POST'])
-def send_to_1c():
-    """
-    Trimite factura - încearcă API, apoi fallback la export
-    """
-    data = request.json
-    use_api = data.get('use_api', True)
-    export_format = data.get('export_format', 'json')
-
-    result = {'success': False}
-
-    try:
-        # Încearcă API dacă este activat
-        if use_api:
-            try:
-                api_result = one_c.send_invoice(data)
-
-                if api_result['success']:
-                    result = {
-                        'success': True,
-                        'one_c_id': api_result.get('one_c_id'),
-                        'method': 'API',
-                        'message': 'Trimis cu succes prin API'
-                    }
-                else:
-                    raise Exception(api_result.get('error', 'API a eșuat'))
-
-            except Exception as api_error:
-                logger.warning(f"API indisponibil: {str(api_error)}. Folosim export...")
-                # Continuăm cu export
-                use_api = False
-
-        # Dacă API nu funcționează sau nu este activat, folosim export
-        if not use_api:
-            export_result = export_invoice(data, export_format)
-
-            if export_result['success']:
-                result = {
-                    'success': True,
-                    'method': export_format.upper(),
-                    'file': export_result.get('file'),
-                    'message': f'Exportat cu succes ca {export_format.upper()}'
-                }
-            else:
-                result = {
-                    'success': False,
-                    'error': export_result.get('error')
-                }
-
-        # Șterge fișierul după procesare cu succes
-        if result['success'] and 'file_path' in data:
-            try:
-                os.remove(data['file_path'])
-            except:
-                pass
-
-        return jsonify(result)
-
-    except Exception as e:
-        logger.error(f"Eroare generală: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
 
 @app.route('/api/export', methods=['POST'])
 def export_invoice_route():
@@ -208,11 +141,6 @@ def serve_image(filename):
     """Servește imaginea facturii pentru preview"""
     return send_from_directory(Config.UPLOAD_FOLDER, filename)
 
-@app.route('/api/config/test-1c', methods=['GET'])
-def test_1c_connection():
-    """Testează conexiunea la 1C"""
-    is_connected = one_c.verify_connection()
-    return jsonify({'connected': is_connected})
 
 @app.route('/api/exports/<path:filename>')
 def download_export(filename):
@@ -376,7 +304,6 @@ def analyze_invoice_via_azure_di(file_path: str):
             'contractor': contractor,
             'idno': idno,
             'total_amount': total_amount,
-            'delivery_date': None,
             'vat_amount': vat_amount,
             'confidence': confidence
         }

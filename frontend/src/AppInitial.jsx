@@ -1,8 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, CheckCircle, XCircle, Settings, RotateCw } from 'lucide-react';
-import InvoicePreview from './components/InvoicePreview';
+import ViewerPane from './components/ViewerPane.jsx';
 import InvoiceForm from './components/InvoiceForm';
-import ConfigPanel from './components/ConfigPanel';
 
 function App() {
   const [invoices, setInvoices] = useState([]);
@@ -10,16 +9,14 @@ function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [message, setMessage] = useState(null);
+  const [zoom, setZoom] = useState(1);
 
   const addMoreInputRef = useRef(null);
 
   // Păstrăm câmpurile pentru compatibilitate cu ConfigPanel, dar NU mai folosim API 1C
   const [config, setConfig] = useState({
-    useApi: false,               // dezactivat
     exportFormat: 'json',
-    apiUrl: 'http://localhost:5000',
-    apiUsername: 'admin',
-    apiPassword: 'password'
+    apiUrl: 'http://localhost:5000'
   });
 
   const stats = {
@@ -150,12 +147,19 @@ function App() {
           disabled={isUploading}
         />
 
+        {/* Stil pentru a ascunde câmpul 'Data livrării' indiferent unde e definit */}
+        <style>{`
+          #delivery_date, [name="delivery_date"], label[for="delivery_date"] {
+            display: none !important;
+          }
+        `}</style>
+
         {/* Header */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                Procesare Facturi OCR + 1C
+                Procesare Facturi OCR
               </h1>
               <p className="text-gray-600">
                 Sistem automatizat pentru Republica Moldova
@@ -221,13 +225,43 @@ function App() {
           )}
         </div>
 
-        {/* Config Panel */}
+        {/* Config Panel (simplificat, fără câmpuri 1C) */}
         {showConfig && (
-          <ConfigPanel
-            config={config}
-            setConfig={setConfig}
-            onClose={() => setShowConfig(false)}
-          />
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Configurări</h2>
+              <button
+                onClick={() => setShowConfig(false)}
+                className="text-gray-500 hover:text-gray-700"
+                aria-label="Închide"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">API URL</label>
+                <input
+                  type="text"
+                  className="w-full border rounded-md px-3 py-2"
+                  value={config.apiUrl}
+                  onChange={(e) => setConfig((c) => ({ ...c, apiUrl: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">Format export</label>
+                <select
+                  className="w-full border rounded-md px-3 py-2"
+                  value={config.exportFormat}
+                  onChange={(e) => setConfig((c) => ({ ...c, exportFormat: e.target.value }))}
+                >
+                  <option value="json">JSON</option>
+                  <option value="xml">XML</option>
+                  <option value="dbf">DBF</option>
+                </select>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Message */}
@@ -279,10 +313,44 @@ function App() {
         {/* Invoice Processing */}
         {invoices.length > 0 && (
           <div className="grid grid-cols-2 gap-6">
-            <InvoicePreview
-              invoice={invoices[currentIndex]}
-              apiUrl={config.apiUrl}
-            />
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-medium">Previzualizare</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
+                    className="px-2 py-1 border rounded-md hover:bg-gray-50"
+                    title="Micșorează"
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
+                    className="px-2 py-1 border rounded-md hover:bg-gray-50"
+                    title="Mărește"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() => setZoom(1)}
+                    className="px-2 py-1 border rounded-md hover:bg-gray-50"
+                    title="Reset"
+                  >
+                    100%
+                  </button>
+                </div>
+              </div>
+
+              <ViewerPane
+                src={
+                  invoices[currentIndex]?.preview_url
+                    ? `${config.apiUrl}${invoices[currentIndex].preview_url}`
+                    : `${config.apiUrl}/api/image/${encodeURIComponent(invoices[currentIndex]?.server_filename || '')}`
+                }
+                filename={invoices[currentIndex]?.server_filename}
+                zoom={zoom}
+              />
+            </div>
 
             <InvoiceForm
               invoice={invoices[currentIndex]}
