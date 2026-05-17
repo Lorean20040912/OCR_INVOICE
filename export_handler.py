@@ -195,7 +195,116 @@ class ExportHandler:
                 invoice_date = datetime.strptime(invoice_data.get('invoice_date', '2024-01-01'), '%Y-%m-%d').date()
             except:
                 invoice_date = datetime(2024, 1, 1).date()
+import json
+import xml.etree.ElementTree as ET
+import csv
+import os
+from datetime import datetime
+from config import Config
+import logging
 
+logger = logging.getLogger(__name__)
+
+class ExportHandler:
+    def __init__(self):
+        self.export_folder = Config.EXPORT_FOLDER
+        Config.create_directories()
+
+    def export_to_json(self, invoice_data):
+        """Export în format JSON"""
+        try:
+            filename = f"invoice_{invoice_data.get('invoice_number', 'unknown')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            filepath = Config.JSON_EXPORT_PATH / filename
+
+            export_data = {
+                'invoice_number': invoice_data.get('invoice_number'),
+                'invoice_date': invoice_data.get('invoice_date'),
+                'contractor': invoice_data.get('contractor'),
+                'idno': invoice_data.get('idno'),
+                'total_amount': invoice_data.get('total_amount'),
+                'delivery_date': invoice_data.get('delivery_date'),
+                'vat_amount': invoice_data.get('vat_amount'),
+                'confidence': invoice_data.get('confidence'),
+                'exported_at': datetime.now().isoformat()
+            }
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"Export JSON creat: {filepath}")
+            return {'success': True, 'file': str(filepath)}
+
+        except Exception as e:
+            logger.error(f"Eroare export JSON: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def export_to_xml(self, invoice_data):
+        """Export în format XML"""
+        try:
+            filename = f"invoice_{invoice_data.get('invoice_number', 'unknown')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
+            filepath = Config.XML_EXPORT_PATH / filename
+
+            root = ET.Element('Invoice')
+
+            for field, value in invoice_data.items():
+                if field not in ['raw_text', 'file_path']:
+                    elem = ET.SubElement(root, field)
+                    elem.text = str(value) if value is not None else ''
+
+            # Adaugă timestamp
+            timestamp = ET.SubElement(root, 'exported_at')
+            timestamp.text = datetime.now().isoformat()
+
+            tree = ET.ElementTree(root)
+            tree.write(filepath, encoding='utf-8', xml_declaration=True)
+
+            logger.info(f"Export XML creat: {filepath}")
+            return {'success': True, 'file': str(filepath)}
+
+        except Exception as e:
+            logger.error(f"Eroare export XML: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def export_to_dbf_csv(self, invoice_data):
+        """Export în format CSV (compatibil DBF)"""
+        try:
+            filename = f"invoice_{invoice_data.get('invoice_number', 'unknown')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filepath = Config.DBF_EXPORT_PATH / filename
+
+            with open(filepath, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+
+                # Header
+                writer.writerow([
+                    'INVOICE_NUM', 'INVOICE_DATE', 'CONTRACTOR', 'IDNO',
+                    'TOTAL_AMT', 'DELIVERY_DT', 'VAT_AMOUNT', 'CONFIDENCE',
+                    'EXPORT_TIME'
+                ])
+
+                # Data
+                writer.writerow([
+                    invoice_data.get('invoice_number', ''),
+                    invoice_data.get('invoice_date', ''),
+                    invoice_data.get('contractor', ''),
+                    invoice_data.get('idno', ''),
+                    invoice_data.get('total_amount', 0),
+                    invoice_data.get('delivery_date', ''),
+                    invoice_data.get('vat_amount', 0),
+                    invoice_data.get('confidence', 0),
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                ])
+
+            logger.info(f"Export CSV creat: {filepath}")
+            return {'success': True, 'file': str(filepath)}
+
+        except Exception as e:
+            logger.error(f"Eroare export CSV: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def export_to_true_dbf(self, invoice_data):
+        """Încercare export DBF real (necesită dbfread)"""
+        # Placeholder - ar necesita instalarea dbfread
+        return self.export_to_dbf_csv(invoice_data)
             try:
                 delivery_date = datetime.strptime(invoice_data.get('delivery_date', '2024-01-01'), '%Y-%m-%d').date()
             except:

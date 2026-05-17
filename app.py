@@ -6,7 +6,7 @@ import os
 import uuid
 from ocr_processor import OCRProcessor
 from one_c_integration import OneCIntegration
-from export_handler import ExportHandler
+from export_handler_clean import ExportHandler
 from config import Config
 import logging
 

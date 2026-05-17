@@ -1,165 +1,297 @@
-import io
+import os
 import re
-from google.cloud import vision
-from PIL import Image
-from pdf2image import convert_from_path
+import json
+import time
 import logging
+import urllib.request
+from typing import Optional, Dict
+
+# pytesseract este opțional
+try:
+    import pytesseract  # type: ignore
+except Exception:
+    pytesseract = None
 
 logger = logging.getLogger(__name__)
 
 
 class OCRProcessor:
-    def __init__(self):
-        try:
-            self.client = vision.ImageAnnotatorClient()
-            self.use_real_ocr = True
-            logger.info("Google Cloud Vision API initialized successfully")
-        except Exception as e:
-            logger.warning(f"Google Cloud Vision API not available: {str(e)}")
-            logger.info("Using mock OCR for testing")
-            self.client = None
-            self.use_real_ocr = False
+    """
+    Motoare OCR suportate:
+      - azure (implici dacă AZURE_VISION_ENDPOINT + AZURE_VISION_KEY sunt setate)
+      - tesseract (fallback dacă este instalat)
+      - mock (dacă nu e disponibil nimic)
+    OpenCV/Numpy NU sunt importate global; se folosesc doar dacă există și doar la nevoie (lazy).
+    """
 
-    def process_invoice(self, file_path):
-        """Procesează factura și extrage datele necesare"""
-        try:
-            # Dacă nu avem OCR real, folosim date mock pentru testare
-            if not self.use_real_ocr:
-                return self._generate_mock_data(file_path)
+    def __init__(self, engine: Optional[str] = None):
+        self.azure_endpoint = os.getenv("AZURE_VISION_ENDPOINT")
+        self.azure_key = os.getenv("AZURE_VISION_KEY")
+        self.compare_all_default = os.getenv("OCR_COMPARE_ALL", "0").lower() in ("1", "true", "yes")
 
-            # Convertește PDF în imagine dacă este necesar
-            if file_path.lower().endswith('.pdf'):
-                import os
-                base_dir = os.path.dirname(os.path.abspath(__file__))
-                poppler_path = os.path.join(base_dir, 'Release-25.12.0-0', 'poppler-25.12.0', 'Library', 'bin')
-                images = convert_from_path(file_path, first_page=1, last_page=1, poppler_path=poppler_path)
-                image = images[0]
-
-                # Convertește la bytes pentru Vision API
-                img_byte_arr = io.BytesIO()
-                image.save(img_byte_arr, format='PNG')
-                content = img_byte_arr.getvalue()
+        if engine:
+            self.primary_engine = engine.lower()
+        else:
+            if self.azure_endpoint and self.azure_key:
+                self.primary_engine = "azure"
+            elif pytesseract is not None:
+                self.primary_engine = "tesseract"
             else:
-                with io.open(file_path, 'rb') as image_file:
-                    content = image_file.read()
+                self.primary_engine = "mock"
 
-            # Apelează Google Cloud Vision API
-            image = vision.Image(content=content)
+        # Config Tesseract (Windows path implicit, dacă există)
+        if pytesseract is not None and os.name == "nt":
+            default_path = os.environ.get("TESSERACT_PATH", r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+            if os.path.exists(default_path):
+                try:
+                    pytesseract.pytesseract.tesseract_cmd = default_path
+                except Exception:
+                    pass
 
-            # OCR text detection
-            response = self.client.text_detection(image=image)
-            texts = response.text_annotations
+        self.tesseract_config = "--psm 6 --oem 3 -l ron"
 
-            if not texts:
-                return None
+    def process_invoice(self, file_path: str, compare_all: Optional[bool] = None) -> Optional[dict]:
+        compare = self.compare_all_default if compare_all is None else compare_all
 
-            full_text = texts[0].description
+        text = self._run_engine(self.primary_engine, file_path)
+        if not text:
+            logger.warning("Motorul principal a returnat text gol; folosesc date mock pentru continuitate")
+            result = self._generate_mock_data(file_path)
+            result["ocr_engine"] = "mock"
+            if compare:
+                result["comparisons"] = self._collect_comparisons(file_path, include_primary=True)
+            return result
 
-            # Extrage datele din text
-            extracted_data = self._extract_invoice_data(full_text)
+        result = self.extract_invoice_data(text)
+        result["raw_text"] = text
+        result["ocr_engine"] = self.primary_engine
 
-            # Document text detection pentru structură mai bună
-            document = self.client.document_text_detection(image=image)
+        if compare:
+            result["comparisons"] = self._collect_comparisons(file_path, include_primary=False)
 
-            # Încearcă să îmbunătățească extragerea cu informații structurale
-            if document.full_text_annotation:
-                self._enhance_extraction(extracted_data, document.full_text_annotation)
+        return result
 
-            return extracted_data
-
+    # ==== RULARE MOTOARE ====
+    def _run_engine(self, engine: str, file_path: str) -> str:
+        try:
+            eng = engine.lower()
+            if eng == "azure":
+                return self._azure_read(file_path)
+            if eng == "tesseract":
+                return self._tesseract_read(file_path)
+            return ""
         except Exception as e:
-            logger.error(f"Eroare la procesare OCR: {str(e)}")
-            raise
+            logger.error(f"Eroare motor '{engine}': {e}")
+            return ""
 
-    def _generate_mock_data(self, file_path):
-        """Generează date mock pentru testare când OCR nu este disponibil"""
-        from datetime import datetime
-        import random
+    def _azure_read(self, file_path: str) -> str:
+        if not (self.azure_endpoint and self.azure_key):
+            return ""
 
-        logger.info(f"Generating mock data for {file_path}")
+        url = self.azure_endpoint.rstrip("/") + "/vision/v3.2/read/analyze"
+        with open(file_path, "rb") as f:
+            data = f.read()
 
-        return {
-            'invoice_number': f'FACT-2024-{random.randint(1000, 9999)}',
-            'invoice_date': datetime.now().strftime('%Y-%m-%d'),
-            'contractor': 'SRL COMPANIA EXEMPLU',
-            'idno': f'{random.randint(1000000000000, 9999999999999)}',
-            'total_amount': f'{random.randint(1000, 50000)}.{random.randint(10, 99)}',
-            'delivery_date': datetime.now().strftime('%Y-%m-%d'),
-            'vat_amount': f'{random.randint(100, 5000)}.{random.randint(10, 99)}',
-            'confidence': 0.85  # Mock confidence
-        }
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method="POST",
+            headers={
+                "Ocp-Apim-Subscription-Key": self.azure_key,
+                "Content-Type": "application/octet-stream",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            op_loc = resp.headers.get("Operation-Location") or resp.headers.get("operation-location")
 
-    def _extract_invoice_data(self, text):
-        """Extrage datele specifice din textul OCR - adaptat pentru Moldova"""
-        data = {
-            'invoice_number': None,
-            'invoice_date': None,
-            'contractor': None,
-            'idno': None,  # IDNO în loc de CUI
-            'total_amount': None,
-            'delivery_date': None,
-            'vat_amount': None,
-            'confidence': 0.0
-        }
+        if not op_loc:
+            return ""
 
-        # Regex patterns pentru datele din Republica Moldova
-        patterns = {
-            'invoice_number': r'(?:FACTURA|FACT(?:URA)?\.?|ФАКТУРА)\s*(?:NR\.?|NUMĂR|№)?\s*:?\s*([A-Z0-9\-/]+)',
-            'invoice_date': r'(?:DATA|DATE|ДАТА)?\s*:?\s*(\d{1,2}[\./-]\d{1,2}[\./-]\d{2,4})',
-            'idno': r'(?:IDNO|I\.D\.N\.O\.?|COD\s+FISCAL)\s*:?\s*(\d{13})',  # IDNO are 13 cifre
-            'total_amount': r'(?:TOTAL|TOTAL\s+(?:GENERAL|DE\s+PLATA)|ИТОГО)\s*:?\s*([\d\.,]+)',
-            'delivery_date': r'(?:DATA\s+LIVRARE|LIVRARE|ДАТА\s+ПОСТАВКИ)\s*:?\s*(\d{1,2}[\./-]\d{1,2}[\./-]\d{2,4})',
-            'vat_amount': r'(?:TVA|T\.V\.A\.?|НДС)\s*:?\s*([\d\.,]+)'
-        }
+        deadline = time.time() + 60
+        status = "running"
+        last_payload = None
+        while time.time() < deadline and status in ("running", "notstarted", "notStarted"):
+            time.sleep(1.0)
+            get_req = urllib.request.Request(
+                op_loc,
+                headers={"Ocp-Apim-Subscription-Key": self.azure_key},
+                method="GET",
+            )
+            with urllib.request.urlopen(get_req, timeout=30) as g:
+                last_payload = json.loads(g.read().decode("utf-8"))
+            status = (last_payload.get("status") or "").lower()
+            if status == "succeeded":
+                analyze = last_payload.get("analyzeResult", {}) or {}
+                if isinstance(analyze.get("content"), str):
+                    return analyze["content"]
+                lines_out = []
+                for page in analyze.get("readResults", []):
+                    for line in page.get("lines", []):
+                        txt = line.get("text")
+                        if txt:
+                            lines_out.append(txt)
+                for page in analyze.get("pages", []):
+                    for line in page.get("lines", []):
+                        txt = line.get("content") or line.get("text")
+                        if txt:
+                            lines_out.append(txt)
+                return "\n".join(lines_out)
 
-        for field, pattern in patterns.items():
-            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-            if match:
-                value = match.group(1).strip()
-
-                # Normalizează valorile
-                if field in ['total_amount', 'vat_amount']:
-                    value = value.replace(',', '.')
-                elif field in ['invoice_date', 'delivery_date']:
-                    value = self._normalize_date(value)
-
-                data[field] = value
-
-        # Extrage numele companiei (de obicei primele linii după antet)
-        lines = text.split('\n')
-        for i, line in enumerate(lines[:10]):
-            if re.search(r'S\.?R\.?L|S\.?A\.|I\.?P\.|ÎCS|ООО|SRL|ÎM', line, re.IGNORECASE):
-                # Ia liniile anterioare ca nume companie
-                contractor_parts = []
-                for j in range(max(0, i - 2), i + 1):
-                    if lines[j].strip() and not re.search(r'FACTURA|ФАКТУРА|NR\.|№|DATA|ДАТА', lines[j], re.IGNORECASE):
-                        contractor_parts.append(lines[j].strip())
-                data['contractor'] = ' '.join(contractor_parts)
+            if status == "failed":
                 break
 
-        # Calculează confidence score bazat pe câmpuri completate
-        filled_fields = sum(1 for v in data.values() if v is not None)
-        data['confidence'] = filled_fields / (len(data) - 1)  # -1 pentru câmpul confidence
+        return ""
 
+    def _tesseract_read(self, file_path: str) -> str:
+        if pytesseract is None:
+            return ""
+
+        # Dacă avem PIL, îl folosim ca să evităm complet OpenCV/NumPy
+        try:
+            from PIL import Image  # type: ignore
+        except Exception:
+            Image = None
+
+        if Image is not None:
+            try:
+                with Image.open(file_path) as img:
+                    # Convertim în L (grayscale) pentru rezultat mai stabil
+                    img = img.convert("L")
+                    txt = pytesseract.image_to_string(img, config=self.tesseract_config)
+                    return txt.strip()
+            except Exception:
+                return ""
+
+        # Dacă nu există PIL, încercăm lazy OpenCV NUMAI dacă e instalat corect
+        try:
+            import cv2  # type: ignore
+            img = cv2.imread(file_path)
+            if img is None:
+                return ""
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            txt = pytesseract.image_to_string(gray, config=self.tesseract_config)
+            return txt.strip()
+        except Exception:
+            return ""
+
+    # ==== COMPARAȚIE ====
+    def _collect_comparisons(self, file_path: str, include_primary: bool) -> Dict[str, dict]:
+        engines = ["azure", "tesseract"]
+        out: Dict[str, dict] = {}
+        for eng in engines:
+            if not include_primary and eng == self.primary_engine:
+                continue
+            txt = self._run_engine(eng, file_path)
+            if not txt:
+                out[eng] = {"available": False}
+                continue
+            data = self.extract_invoice_data(txt)
+            out[eng] = {
+                "available": True,
+                "ocr_engine": eng,
+                "confidence": data.get("confidence", 0.0),
+                "invoice_number": data.get("invoice_number"),
+                "invoice_date": data.get("invoice_date"),
+                "idno": data.get("idno"),
+                "total_amount": data.get("total_amount"),
+            }
+        return out
+
+    # ==== EXTRAGERE DATE ====
+    def extract_invoice_data(self, text: str) -> dict:
+        data = {
+            "invoice_number": None,
+            "invoice_date": None,
+            "contractor": None,
+            "idno": None,
+            "total_amount": None,
+            "delivery_date": None,
+            "vat_amount": None,
+            "confidence": 0.0,
+        }
+        try:
+            inv_patterns = [
+                r"(?:FACT|Factur|Nr\.?|Invoice|#|Factură)\s*[-:]*\s*([A-Z0-9\-/]+)",
+                r"(?:inv|invoice)[\s\-:]*(\d+[-/]\d+)",
+                r"(?:factur[aă]|nr)[\s\-:]*(\d+)",
+                r"([A-Z]{1,3}\d{2,4}[/-]\d{1,6})",
+                r"(\d{3,}[-/]\d{2,})",
+            ]
+            for p in inv_patterns:
+                m = re.search(p, text, re.IGNORECASE)
+                if m:
+                    data["invoice_number"] = m.group(1)
+                    break
+
+            date_patterns = [
+                r"(\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4})",
+                r"(\d{4}[\.\/\-]\d{1,2}[\.\/\-]\d{1,2})",
+            ]
+            for p in date_patterns:
+                m = re.search(p, text)
+                if m:
+                    data["invoice_date"] = self._normalize_date(m.group(1))
+                    break
+
+            contractor_patterns = [
+                r"(?:s\.?r\.?l\.?|srl|sa)\s+([a-zA-ZĂÂÎȘȚăâîșț\s]{3,50})",
+                r"([A-ZĂÂÎȘȚ][a-zA-ZĂÂÎȘȚăâîșț\s]{3,50})\s+(?:s\.?r\.?l\.?|srl|sa)",
+                r"(?:furnizor|vânzător)[:\s]+([a-zA-ZĂÂÎȘȚăâîșț\s]{3,50})",
+            ]
+            for p in contractor_patterns:
+                m = re.search(p, text, re.IGNORECASE)
+                if m:
+                    data["contractor"] = m.group(1).strip()
+                    break
+
+            m = re.search(r"\b(\d{13})\b", text)
+            if m:
+                data["idno"] = m.group(1)
+
+            amt_patterns = [
+                r"(?:total(?:\s+general)?|suma|amount)[:\s]+([\d\.\, ]+)",
+                r"\b(\d+[.,]\d{2})\s*(?:MDL|RON|EUR|USD|LEI)\b",
+            ]
+            for p in amt_patterns:
+                m = re.search(p, text, re.IGNORECASE | re.MULTILINE)
+                if m:
+                    val = m.group(1).replace(" ", "").replace(",", ".")
+                    try:
+                        data["total_amount"] = float(val)
+                    except Exception:
+                        data["total_amount"] = val
+                    break
+
+            filled = sum(1 for k, v in data.items() if k != "confidence" and v not in (None, ""))
+            data["confidence"] = filled / (len(data) - 1)
+        except Exception as e:
+            logger.error(f"Eroare la extragerea datelor: {e}")
         return data
 
-    def _normalize_date(self, date_str):
-        """Normalizează datele în format ISO (YYYY-MM-DD)"""
-        # Înlocuiește separatori
-        date_str = date_str.replace('/', '-').replace('.', '-')
-
-        parts = date_str.split('-')
+    def _normalize_date(self, date_str: str) -> str:
+        s = date_str.replace("/", "-").replace(".", "-").strip()
+        parts = s.split("-")
         if len(parts) == 3:
-            day, month, year = parts
+            a, b, c = parts
+            if len(a) == 4:
+                year, month, day = a, b, c
+            else:
+                day, month, year = a, b, c
+                if len(year) == 2:
+                    year = ("20" if int(year) < 50 else "19") + year
+            return f"{year.zfill(4)}-{month.zfill(2)}-{day.zfill(2)}"
+        return s
 
-            # Convertește anul la 4 cifre
-            if len(year) == 2:
-                year = '20' + year if int(year) < 50 else '19' + year
-
-            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-
-        return date_str
-
-    def _enhance_extraction(self, data, full_text_annotation):
-        """Îmbunătățește extragerea folosind informații structurale"""
-        pass
+    def _generate_mock_data(self, file_path: str) -> dict:
+        from datetime import datetime
+        import random
+        return {
+            "invoice_number": f"FACT-{datetime.now().year}-{random.randint(1000, 9999)}",
+            "invoice_date": datetime.now().strftime("%Y-%m-%d"),
+            "contractor": "SRL COMPANIA EXEMPLU",
+            "idno": f"{random.randint(10**12, 10**13 - 1)}",
+            "total_amount": round(random.uniform(100, 5000), 2),
+            "delivery_date": datetime.now().strftime("%Y-%m-%d"),
+            "vat_amount": round(random.uniform(20, 500), 2),
+            "confidence": 0.5,
+        }

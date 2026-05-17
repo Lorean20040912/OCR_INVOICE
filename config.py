@@ -1,56 +1,63 @@
 """
 Configurare Sistem OCR Inteligent
-Setări optimizate pentru procesare facturi în moldavă și engleză
+Setări optimizate pentru procesare facturi în română și engleză
 """
-
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+# Încarcă variabilele de mediu din .env dacă python-dotenv este disponibil;
+# altfel continuă fără a opri aplicația.
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:  # pragma: no cover - fallback dacă lipsește pachetul
+    def load_dotenv(*args, **kwargs):
+        return False
 
 load_dotenv()
 
 
 class Config:
     """Configurare globală sistem OCR"""
-    
+
     # === PROJECT PATHS ===
-    PROJECT_ROOT = Path(__file__).parent
-    TEST_INVOICES_DIR = PROJECT_ROOT / 'test_invoices'
-    DEBUG_DIR = PROJECT_ROOT / 'debug_preprocessing'
-    RESULTS_DIR = PROJECT_ROOT / 'benchmark_results'
-    THESIS_RESULTS_DIR = PROJECT_ROOT / 'thesis_results'
-    UPLOADS_DIR = PROJECT_ROOT / 'uploads'
-    
+    BASE_DIR = Path(__file__).parent.absolute()
+    PROJECT_ROOT = BASE_DIR
+
+    # Căi utilizate în restul codului
+    UPLOAD_FOLDER = BASE_DIR / 'uploads'         # compat pentru cod existent
+    EXPORT_FOLDER = BASE_DIR / 'exports'
+    JSON_EXPORT_PATH = EXPORT_FOLDER / 'json'
+    XML_EXPORT_PATH = EXPORT_FOLDER / 'xml'
+    DBF_EXPORT_PATH = EXPORT_FOLDER / 'dbf'
+
+    # Denumiri alternative folosite de alte module
+    UPLOADS_DIR = UPLOAD_FOLDER
+    DEBUG_DIR = BASE_DIR / 'debug_preprocessing'
+    RESULTS_DIR = BASE_DIR / 'benchmark_results'
+    THESIS_RESULTS_DIR = BASE_DIR / 'thesis_results'
+    TEST_INVOICES_DIR = BASE_DIR / 'test_invoices'
+
+    # === FILES & LIMITS ===
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_FILE_SIZE = MAX_CONTENT_LENGTH
+
     # === TESSERACT & POPPLER (Windows) ===
-    TESSERACT_PATH = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-    TESSDATA_PREFIX = r'C:\Program Files\Tesseract-OCR\tessdata'
-    POPPLER_PATH = r'C:\poppler\Library\bin'
-    
+    TESSERACT_CONFIG = '--psm 6 --oem 3 -l ron'
+    TESSERACT_PATH = os.environ.get('TESSERACT_PATH', r'C:\Program Files\Tesseract-OCR\tesseract.exe')
+    TESSDATA_PREFIX = os.environ.get('TESSDATA_PREFIX', r'C:\Program Files\Tesseract-OCR\tessdata')
+    POPPLER_PATH = os.environ.get('POPPLER_PATH', r'C:\poppler\Library\bin')
+
     # === OCR ENGINE SETTINGS ===
     OCR_CONFIG = {
-        'tesseract_psm': 6,  # 6 = Assume a single uniform block of text
-        'tesseract_oem': 3,  # 3 = Both legacy and LSTM model
-        'tesseract_lang': 'ron',  # Romanian language code
-        'min_confidence': 0.5,  # Reject results below 50%
-        'easyocr_gpu': False,  # Set to True if NVIDIA GPU available
-        'easyocr_languages': ['ro', 'en'],  # Romanian and English
+        'tesseract_psm': 6,   # 6 = Assume a single uniform block of text
+        'tesseract_oem': 3,   # 3 = Both legacy and LSTM model
+        'tesseract_lang': 'ron',
+        'min_confidence': 0.5,
+        'easyocr_gpu': False,
+        'easyocr_languages': ['ro', 'en'],
     }
-    
-    # === IMAGE PREPROCESSING ===
-    PREPROCESSING = {
-        'resize_max_height': 1200,
-        'resize_max_width': 1600,
-        'auto_rotate': True,
-        'remove_shadows': True,
-        'clahe_clip_limit': 3.0,
-        'clahe_tile_size': 8,
-        'adaptive_contrast': True,
-        'denoise_bilateral': True,
-        'bilateral_diameter': 9,
-        'sharpen_text': True,
-        'binarization_methods': ['adaptive_gaussian', 'adaptive_mean', 'otsu']
-    }
-    
+
     # === INVOICE FIELD PATTERNS ===
     INVOICE_PATTERNS = {
         'invoice_number': [
@@ -70,34 +77,44 @@ class Config:
             r'\b(\d+[.,]\d{2})\s*(?:MDL|RON|EUR|USD)\b',
         ]
     }
-    
-    # === BENCHMARK SETTINGS ===
+
+    # === BENCHMARK & THESIS SETTINGS ===
     BENCHMARK = {
         'output_dir': 'benchmark_results',
         'graph_dpi': 300,
         'generate_latex': True,
         'generate_graphs': True,
     }
-    
-    # === THESIS REPORT SETTINGS ===
     THESIS = {
         'output_dir': 'thesis_results',
         'include_debug_images': False,
         'include_raw_data': True,
         'min_invoices_for_analysis': 20,
     }
-    
-    # === GOOGLE CLOUD & 1C API ===
+
+    # === EXTERNAL SERVICES ===
     GOOGLE_APPLICATION_CREDENTIALS = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-    ONE_C_API_URL = os.getenv('ONE_C_API_URL')
-    ONE_C_USERNAME = os.getenv('ONE_C_USERNAME')
-    ONE_C_PASSWORD = os.getenv('ONE_C_PASSWORD')
-    
+    ONE_C_API_URL = os.getenv('ONE_C_API_URL', 'http://localhost:8080/api')
+    ONE_C_USERNAME = os.getenv('ONE_C_USERNAME', 'admin')
+    ONE_C_PASSWORD = os.getenv('ONE_C_PASSWORD', 'password')
+
     # === LOGGING ===
     LOG_LEVEL = 'INFO'
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    
-    # === WEB APP SETTINGS ===
-    UPLOAD_FOLDER = 'uploads'
-    MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB
-    ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
+
+    # === UTIL ===
+    @classmethod
+    def create_directories(cls):
+        """Creează directoarele necesare pentru rulare"""
+        directories = [
+            cls.UPLOAD_FOLDER,
+            cls.EXPORT_FOLDER,
+            cls.JSON_EXPORT_PATH,
+            cls.XML_EXPORT_PATH,
+            cls.DBF_EXPORT_PATH,
+            cls.DEBUG_DIR,
+            cls.RESULTS_DIR,
+            cls.THESIS_RESULTS_DIR,
+        ]
+        for directory in directories:
+            Path(directory).mkdir(parents=True, exist_ok=True)

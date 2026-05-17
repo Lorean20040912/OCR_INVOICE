@@ -62,7 +62,151 @@ function App() {
 
   const handleApprove = async () => {
     const currentInvoice = invoices[currentIndex];
+import React, { useRef, useState } from "react";
 
+const API_BASE = "http://localhost:5000";
+
+function App() {
+  const fileInputRef = useRef(null);
+  const [invoices, setInvoices] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  const onAddMoreClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const onFilesSelected = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    setIsUploading(true);
+    setError("");
+
+    try {
+      const form = new FormData();
+      for (const f of files) {
+        form.append("files", f);
+      }
+
+      const res = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `Upload eșuat (${res.status})`);
+      }
+
+      const data = await res.json();
+      const newInvoices = (data && data.invoices) || [];
+
+      // Normalizez filename pentru preview: extrag ultimul segment din file_path
+      const normalized = newInvoices.map((inv) => {
+        const filePath = inv.file_path || "";
+        const serverFile = filePath.split(/[/\\\\]/).pop() || "";
+        return { ...inv, server_filename: serverFile };
+      });
+
+      setInvoices((prev) => [...prev, ...normalized]);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Upload eșuat");
+    } finally {
+      setIsUploading(false);
+      // permite selectarea aceluiași fișier din nou
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div style={{ fontFamily: "system-ui, Arial", maxWidth: 1000, margin: "20px auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Procesare Facturi OCR + 1C</h1>
+      <p style={{ color: "#555", marginBottom: 16 }}>
+        Încarcă una sau mai multe facturi. Poți adăuga alte fișiere ulterior, fără să reîncarci pagina.
+      </p>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+        <button
+          onClick={onAddMoreClick}
+          disabled={isUploading}
+          style={{
+            background: "#2563eb",
+            color: "white",
+            border: 0,
+            borderRadius: 8,
+            padding: "10px 14px",
+            cursor: "pointer",
+            opacity: isUploading ? 0.8 : 1,
+          }}
+        >
+          {isUploading ? "Se încarcă..." : "Adaugă alte facturi"}
+        </button>
+
+        <input
+          type="file"
+          multiple
+          accept=".png,.jpg,.jpeg,.pdf,.tif,.tiff"
+          ref={fileInputRef}
+          onChange={onFilesSelected}
+          style={{ display: "none" }}
+        />
+
+        <span style={{ fontSize: 12, color: "#666" }}>
+          Motor OCR: Azure (setat în backend)
+        </span>
+      </div>
+
+      {error ? (
+        <div style={{ background: "#fee2e2", color: "#991b1b", border: "1px solid #fecaca", padding: 10, borderRadius: 8, marginBottom: 16 }}>
+          {error}
+        </div>
+      ) : null}
+
+      <div style={{ marginTop: 16 }}>
+        <h2 style={{ fontSize: 18, marginBottom: 8 }}>Facturi procesate</h2>
+        {invoices.length === 0 ? (
+          <div style={{ color: "#666" }}>Încă nu ai încărcat nicio factură.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {invoices.map((inv) => (
+              <div key={inv.unique_id || inv.file_path} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 12 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                  {inv.original_filename || inv.invoice_number || "Factura"}
+                </div>
+                <div style={{ fontSize: 13, color: "#374151" }}>
+                  <div>Număr: {inv.invoice_number || "-"}</div>
+                  <div>Data: {inv.invoice_date || "-"}</div>
+                  <div>Furnizor: {inv.contractor || "-"}</div>
+                  <div>IDNO: {inv.idno || "-"}</div>
+                  <div>Suma: {inv.total_amount != null ? inv.total_amount : "-"}</div>
+                  <div>TVA: {inv.vat_amount != null ? inv.vat_amount : "-"}</div>
+                  <div>Confidence: {inv.confidence != null ? inv.confidence : "-"}</div>
+                </div>
+
+                {inv.server_filename ? (
+                  <div style={{ marginTop: 8 }}>
+                    <a
+                      href={`${API_BASE}/api/image/${encodeURIComponent(inv.server_filename)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 13, color: "#2563eb", textDecoration: "none" }}
+                    >
+                      Vezi fișierul
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;
     try {
       const response = await fetch(`${config.apiUrl}/api/send-to-1c`, {
         method: 'POST',
