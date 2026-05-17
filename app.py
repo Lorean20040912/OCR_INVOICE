@@ -85,6 +85,10 @@ def upload_files():
                     invoice_data['original_filename'] = filename
                     invoice_data['status'] = 'pending'
                     invoice_data['unique_id'] = str(uuid.uuid4())
+                    # pentru preview în frontend
+                    server_filename = os.path.basename(filepath)
+                    invoice_data['server_filename'] = server_filename
+                    invoice_data['preview_url'] = f"/api/image/{server_filename}"
                     processed_invoices.append(invoice_data)
                     logger.info(f"Invoice processed: {filename}")
                 else:
@@ -293,9 +297,69 @@ def analyze_invoice_via_azure_di(file_path: str):
             f = fields.get(name) or {}
             return f.get('confidence')
 
+        def _norm_date(val):
+            # întoarce 'YYYY-MM-DD' sau None
+            if not val:
+                return None
+            s = str(val).strip()
+            # încerci mai întâi ISO
+            from datetime import datetime
+            for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
+                try:
+                    return datetime.strptime(s, fmt).date().isoformat()
+                except Exception:
+                    continue
+            # încearcă fromisoformat (poate include timp)
+            try:
+                return datetime.fromisoformat(s).date().isoformat()
+            except Exception:
+                pass
+            # dacă nu se poate, returnează stringul original
+            return s
+
         invoice_number = _get_str('InvoiceId')
-        invoice_date = _get_date('InvoiceDate')
-        contractor = _get_str('VendorName') or _get_str('CustomerName')
+        invoice_date = _norm_date(_get_date('InvoiceDate') or _get_str('InvoiceDate'))
+
+        # identificare furnizor robustă
+        vendor_name = _get_str('VendorName')
+        customer_name = _get_str('CustomerName')
+        vendor_tax = _get_str('VendorTaxId') or _get_str('VendorId')
+        customer_tax = _get_str('CustomerId')  # uneori CustomerId e cod fiscal în modele
+        full_content = (analyze.get('content') or '').strip()
+
+        contractor = None
+        # 1) dacă VendorName e clar și diferit de CustomerName, folosește-l
+        if vendor_name and (not customer_name or vendor_name.strip().lower() != (customer_name or '').strip().lower()):
+            contractor = vendor_name.strip()
+        # 2) dacă VendorName lipsă dar avem VendorTaxId, preferăm tot ce avem ca vendor
+        elif vendor_tax and vendor_name:
+            contractor = vendor_name.strip()
+        # 3) fallback: caută în conținut după etichete uzuale (RO/RU/EN)
+        elif full_content:
+            import re
+            patterns = [
+                r'(?:^|\n)\s*(?:FURNIZOR(?:UL)?|VÂNZĂTOR|VÎNZĂTOR|VINZĂTOR|SUPPLIER|PROVIDER)\s*[:\-]?\s*(.+)',
+                r'(?:^|\n)\s*(?:PRESTATOR|EMITENT)\s*[:\-]?\s*(.+)',
+            ]
+            found = None
+            for pat in patterns:
+                m = re.search(pat, full_content, flags=re.IGNORECASE)
+                if m:
+                    line = m.group(1).strip()
+                    # ia doar prima linie până la sfârșit de linie
+                    candidate = line.splitlines()[0].strip(" \t:-")
+                    # curăță delimitatoare comune
+                    candidate = re.sub(r'\s{2,}', ' ', candidate)
+                    # evită a eticheta cumpărătorul
+                    if not re.search(r'^(?:CUMP[ĂA]R[ĂA]TOR|CUMPARATOR|CLIENT|BUYER)\b', candidate, flags=re.IGNORECASE):
+                        found = candidate
+                        break
+            if found:
+                contractor = found
+        # 4) ultim fallback: folosește VendorName dacă există, altfel CustomerName
+        if not contractor:
+            contractor = vendor_name or customer_name
+
         idno = _get_str('VendorTaxId') or _get_str('CustomerId') or _get_str('VendorId')
         total_amount = _get_curr_amount('InvoiceTotal')
         vat_amount = _get_curr_amount('TotalTax')
@@ -345,6 +409,7 @@ def reprocess_ocr():
 
         invoice_data['file_path'] = file_path
         invoice_data['server_filename'] = os.path.basename(file_path)
+        invoice_data['preview_url'] = f"/api/image/{invoice_data['server_filename']}"
         invoice_data['status'] = invoice_data.get('status') or 'pending'
         invoice_data['unique_id'] = data.get('unique_id') or str(uuid.uuid4())
 
