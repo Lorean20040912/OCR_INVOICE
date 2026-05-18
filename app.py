@@ -108,29 +108,26 @@ def upload_files():
 def serve_uploaded_preview(filename):
     """Servește fișierele încărcate (PNG/JPG/PDF) pentru previzualizare și descărcare."""
     try:
-        # Accept doar numele de fișier (fără directoare)
         safe_name = os.path.basename(filename or "")
         if not safe_name:
             return jsonify({'error': 'Nume fișier invalid'}), 400
 
-        upload_dir = getattr(Config, 'UPLOAD_FOLDER', os.path.join(os.getcwd(), 'uploads'))
+        # FIX: convertim Path la string explicit
+        upload_dir = str(Config.UPLOAD_FOLDER)
         file_path = os.path.join(upload_dir, safe_name)
 
         if not os.path.isfile(file_path):
             logger.warning(f"Preview 404 pentru: {file_path}")
             return jsonify({'error': 'Fișierul nu a fost găsit'}), 404
 
-        # Tip MIME corect
         import mimetypes
-
         mime_type, _ = mimetypes.guess_type(file_path)
         resp = send_file(
             file_path,
             mimetype=mime_type or 'application/octet-stream',
             as_attachment=False,
-            conditional=True,  # permite If-Modified-Since
+            conditional=True,
         )
-        # Antete utile pentru performanță și range requests
         resp.headers['Cache-Control'] = 'public, max-age=3600'
         resp.headers['Accept-Ranges'] = 'bytes'
         return resp
@@ -515,4 +512,5 @@ def reprocess_ocr():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    Config.create_directories()
+    app.run(debug=True, port=5000, use_reloader=False)

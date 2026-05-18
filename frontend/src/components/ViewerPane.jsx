@@ -111,22 +111,19 @@ export default function ViewerPane({ src, filename, zoom = 1 }) {
     );
   }
 
-  if (isPdf) {
-    // Randăm doar prima pagină pe canvas, fără UI sau butoane ale viewer-ului
-    return (
-      <div className="rounded-md border overflow-auto bg-gray-100" style={{ height: 520 }}>
-        <canvas ref={canvasRef} className="block max-w-full h-auto" />
-        {loading && (
-          <div className="text-sm text-gray-600 p-3">Se încarcă previzualizarea PDF...</div>
-        )}
-        {err && (
-          <div className="text-sm text-red-600 p-3">
-            {err}
-          </div>
-        )}
-      </div>
-    );
-  }
+if (isPdf) {
+  return (
+    <div className="rounded-md border overflow-hidden bg-gray-100" style={{ height: 520 }}>
+      <iframe
+        src={`${src}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+        width="100%"
+        height="100%"
+        style={{ border: 'none' }}
+        title={filename || "PDF Preview"}
+      />
+    </div>
+  );
+}
 
   // Imagine simplă cu zoom prin transform + feedback la încărcare/eroare
   return (

@@ -69,8 +69,14 @@ def start_backend():
 
     print("🐍 Pornesc backend Flask pe http://localhost:5000")
     try:
-        # Rulează backend-ul cu același Python; logurile sunt afișate în acest terminal
-        subprocess.Popen([sys.executable, entry], cwd=".")
+        # FIX: folosim calea absolută și nu daemon
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        entry_path = os.path.join(script_dir, entry)
+        subprocess.Popen(
+            [sys.executable, entry_path],
+            cwd=script_dir  # FIX: cwd absolut, nu "."
+        )
+        time.sleep(2)  # Așteaptă să pornească
     except Exception as e:
         print(f"❌ Backend nu a pornit: {e}")
 
