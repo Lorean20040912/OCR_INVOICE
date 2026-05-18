@@ -8,11 +8,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fe42b8f7-c23c-4731-a525-f0aaef11ab9a" name="Changes" comment="repair preview png">
-      <change afterPath="$PROJECT_DIR$/path/to/quick_start.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/ViewerPane.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/ViewerPane.jsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/quick_start.py" beforeDir="false" afterPath="$PROJECT_DIR$/quick_start.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -20,7 +16,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="482" />
+    <option name="cachedIndexableFilesCount" value="557" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -50,29 +46,15 @@
     &quot;assignee&quot;: &quot;Lorean20040912&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings">{
-  &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;https://github.com/Lorean20040912/OCR_INVOICE.git&quot;,
-    &quot;accountId&quot;: &quot;42846949-86e0-4020-b6e6-c25c7e777252&quot;
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "git@github.com:/Lorean20040912/OCR_INVOICE.git",
+    "accountId": "6de1cccd-36a1-4a0c-adba-3c44e41ebb11"
   }
-}</component>
+}]]></component>
   <component name="McpProjectServerCommands">
-    <McpServerCommand>
-      <option name="enabled" value="true" />
-      <option name="name" />
-      <option name="programPath" />
-      <option name="arguments" />
-      <option name="workingDirectory" />
-      <envs />
-    </McpServerCommand>
-    <McpServerCommand>
-      <option name="enabled" value="true" />
-      <option name="name" />
-      <option name="programPath" />
-      <option name="arguments" />
-      <option name="workingDirectory" />
-      <envs />
-    </McpServerCommand>
+    <commands />
+    <urls />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 7
@@ -91,6 +73,7 @@
     "Python.QUICKSTART.executor": "Run",
     "Python.app.executor": "Run",
     "Python.export_handler_clean.executor": "Run",
+    "Python.ocr_benchmark_system.executor": "Run",
     "Python.ocr_processor.executor": "Run",
     "Python.one_c_integration.executor": "Run",
     "Python.quick_start.executor": "Run",
@@ -105,23 +88,27 @@
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "git-widget-placeholder": "main",
     "ignore.virus.scanning.warn.message": "true",
+    "javascript.preferred.runtime.type.id": "node",
     "junie.onboarding.icon.badge.shown": "true",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_interpreter_path": "C:/Users/lorea/AppData/Roaming/JetBrains/PyCharm2025.1/node/versions/24.13.1/node",
+    "nodejs_interpreter_path": "node",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "ml.llm.LLMThirdPartyAiProvidersConfigurable",
+    "settings.editor.selected.configurable": "settings.javascript.runtime",
     "to.speed.mode.migration.done": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecapUselessUpdatesCounter">
+    <option name="suspendCountdown" value="9" />
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-09060db00ec0-JavaScript-PY-251.29188.22" />
-        <option value="bundled-python-sdk-1f1b7bcced7d-64d779b69b7a-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.29188.22" />
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.29346.308" />
+        <option value="bundled-python-sdk-ca5e2b39c7df-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.308" />
       </set>
     </attachedChunks>
   </component>
@@ -139,6 +126,7 @@
       <workItem from="1779047807863" duration="7937000" />
       <workItem from="1779097696740" duration="5191000" />
       <workItem from="1779132178396" duration="6041000" />
+      <workItem from="1779142585214" duration="1972000" />
     </task>
     <task id="LOCAL-00001" summary="create structure of project and initial commit message">
       <option name="closed" value="true" />
@@ -269,12 +257,14 @@
     <option name="LAST_COMMIT_MESSAGE" value="repair preview png" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/PythonProject$app.coverage" NAME="app Coverage Results" MODIFIED="1768819450122" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/OCR_INVOICE$QUICKSTART.coverage" NAME="QUICKSTART Coverage Results" MODIFIED="1779134388539" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/OCR_INVOICE$quick_start.coverage" NAME="quick_start Coverage Results" MODIFIED="1779137790791" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/OCR_INVOICE$app.coverage" NAME="app Coverage Results" MODIFIED="1779135056079" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/PythonProject$ocr_processor.coverage" NAME="ocr_processor Coverage Results" MODIFIED="1768558427436" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/PythonProject$one_c_integration.coverage" NAME="one_c_integration Coverage Results" MODIFIED="1768558362990" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/OCR_INVOICE$app.coverage" NAME="app Coverage Results" MODIFIED="1779135056079" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/a$ocr_benchmark_system.coverage" NAME="ocr_benchmark_system Coverage Results" MODIFIED="1779142765253" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PythonProject$app.coverage" NAME="app Coverage Results" MODIFIED="1768819450122" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/OCR_INVOICE$quick_start.coverage" NAME="quick_start Coverage Results" MODIFIED="1779137790791" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/OCR_INVOICE$QUICKSTART.coverage" NAME="QUICKSTART Coverage Results" MODIFIED="1779134388539" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/PythonProject$ocr_processor.coverage" NAME="ocr_processor Coverage Results" MODIFIED="1768558427436" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/OCR_INVOICE$export_handler_clean.coverage" NAME="export_handler_clean Coverage Results" MODIFIED="1779136472792" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/a$quick_start.coverage" NAME="quick_start Coverage Results" MODIFIED="1779143789903" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
