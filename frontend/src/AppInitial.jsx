@@ -258,6 +258,8 @@ function App() {
                   <option value="json">JSON</option>
                   <option value="xml">XML</option>
                   <option value="dbf">DBF</option>
+                  <option value="xlsx">XLSX</option>
+                  <option value="zip">ZIP (1C pachet)</option>
                 </select>
               </div>
             </div>

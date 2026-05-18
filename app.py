@@ -104,6 +104,41 @@ def upload_files():
     })
 
 
+@app.route('/api/image/<path:filename>', methods=['GET'])
+def serve_uploaded_preview(filename):
+    """Servește fișierele încărcate (PNG/JPG/PDF) pentru previzualizare și descărcare."""
+    try:
+        # Accept doar numele de fișier (fără directoare)
+        safe_name = os.path.basename(filename or "")
+        if not safe_name:
+            return jsonify({'error': 'Nume fișier invalid'}), 400
+
+        upload_dir = getattr(Config, 'UPLOAD_FOLDER', os.path.join(os.getcwd(), 'uploads'))
+        file_path = os.path.join(upload_dir, safe_name)
+
+        if not os.path.isfile(file_path):
+            logger.warning(f"Preview 404 pentru: {file_path}")
+            return jsonify({'error': 'Fișierul nu a fost găsit'}), 404
+
+        # Tip MIME corect
+        import mimetypes
+
+        mime_type, _ = mimetypes.guess_type(file_path)
+        resp = send_file(
+            file_path,
+            mimetype=mime_type or 'application/octet-stream',
+            as_attachment=False,
+            conditional=True,  # permite If-Modified-Since
+        )
+        # Antete utile pentru performanță și range requests
+        resp.headers['Cache-Control'] = 'public, max-age=3600'
+        resp.headers['Accept-Ranges'] = 'bytes'
+        return resp
+    except Exception as e:
+        logger.error(f"Eroare la servirea fișierului {filename}: {e}")
+        return jsonify({'error': 'Eroare internă'}), 500
+
+
 @app.route('/api/export', methods=['POST'])
 def export_invoice_route():
     """Exportă direct într-un format specific"""
@@ -121,6 +156,147 @@ def export_invoice_route():
     else:
         return jsonify(result), 500
 
+def export_to_xlsx_local(invoice_data: dict) -> dict:
+    """
+    Generează un XLSX minimal (OOXML) fără dependențe externe.
+    Scrie câmpurile cheie într-un singur sheet (Sheet1).
+    Returnează dict {'success': True, 'file': <path>} sau {'success': False, 'error': ...}
+    """
+    try:
+        import zipfile
+        from io import BytesIO
+        from datetime import datetime
+
+        os.makedirs(export_handler.export_folder, exist_ok=True)
+
+        # Rânduri cheie -> valoare
+        rows = [
+            ("Invoice Number", str(invoice_data.get("invoice_number") or "")),
+            ("Invoice Date", str(invoice_data.get("invoice_date") or "")),
+            ("Supplier", str(invoice_data.get("contractor") or "")),
+            ("Tax ID", str(invoice_data.get("idno") or "")),
+            ("Total Amount", str(invoice_data.get("total_amount") or "")),
+            ("VAT Amount", str(invoice_data.get("vat_amount") or "")),
+            ("Original File", str(invoice_data.get("original_filename") or "")),
+        ]
+
+        # Construcție XML-uri OOXML minime
+        content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>
+"""
+        rels_root = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>
+"""
+        wb = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>
+"""
+        wb_rels = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>
+"""
+        styles = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border/></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>
+</styleSheet>
+"""
+        # Sheet1 cu două coloane: Cheie, Valoare
+        def xl_row(ridx: int, key: str, val: str) -> str:
+            # r începe de la 1, coloanele A și B
+            key = (key or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            val = (val or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            return f'<row r="{ridx}"><c r="A{ridx}" t="inlineStr"><is><t>{key}</t></is></c><c r="B{ridx}" t="inlineStr"><is><t>{val}</t></is></c></row>'
+
+        rows_xml = "\n".join([xl_row(i + 1, k, v) for i, (k, v) in enumerate(rows)])
+        sheet1 = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>
+    {rows_xml}
+  </sheetData>
+</worksheet>
+"""
+
+        # Nume fișier
+        base = invoice_data.get("invoice_number") or "export"
+        safe = "".join(ch for ch in str(base) if ch.isalnum() or ch in ("-", "_")).strip() or "export"
+        out_path = os.path.join(export_handler.export_folder, f"{safe}.xlsx")
+
+        # Scrie pachetul XLSX
+        with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("[Content_Types].xml", content_types)
+            zf.writestr("_rels/.rels", rels_root)
+            zf.writestr("xl/workbook.xml", wb)
+            zf.writestr("xl/_rels/workbook.xml.rels", wb_rels)
+            zf.writestr("xl/styles.xml", styles)
+            zf.writestr("xl/worksheets/sheet1.xml", sheet1)
+
+        return {"success": True, "file": out_path}
+    except Exception as e:
+        logger.error(f"export_to_xlsx_local error: {e}")
+        return {"success": False, "error": str(e)}
+
+def export_to_zip1c(invoice_data: dict) -> dict:
+    """
+    Creează un pachet ZIP pentru 1C ce conține:
+      - invoice.xlsx (datele facturii)
+      - params.xml (parametri simplificați cu o cheie GUID)
+    """
+    try:
+        import zipfile
+        from datetime import datetime
+
+        os.makedirs(export_handler.export_folder, exist_ok=True)
+
+        # 1) Creează XLSX
+        xres = export_to_xlsx_local(invoice_data)
+        if not xres.get("success"):
+            return xres
+        xlsx_path = xres["file"]
+
+        # 2) Generează params.xml cu o "cheie" (GUID) și meta minimale
+        guid = str(uuid.uuid4())
+        today = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        params_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<ExchangeParameters>
+  <Program>OCR-Invoice-Processor</Program>
+  <ExchangeType>Invoice</ExchangeType>
+  <Guid>{guid}</Guid>
+  <CreatedAt>{today}</CreatedAt>
+  <FileFormat>XLSX</FileFormat>
+  <Comment>Parametri de conectare/sincronizare - exemplu simplificat</Comment>
+</ExchangeParameters>
+"""
+
+        # 3) Construiește ZIP
+        bundle_name = f"invoice_bundle_{guid[:8]}.zip"
+        bundle_path = os.path.join(export_handler.export_folder, bundle_name)
+        with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(xlsx_path, arcname="invoice.xlsx")
+            zf.writestr("params.xml", params_xml)
+
+        return {"success": True, "file": bundle_path}
+    except Exception as e:
+        logger.error(f"export_to_zip1c error: {e}")
+        return {"success": False, "error": str(e)}
+
 def export_invoice(invoice_data, format_type):
     """Helper pentru export în diferite formate"""
     if format_type == 'json':
@@ -133,19 +309,12 @@ def export_invoice(invoice_data, format_type):
             return export_handler.export_to_true_dbf(invoice_data)
         except:
             return export_handler.export_to_dbf_csv(invoice_data)
+    elif format_type == 'xlsx':
+        return export_to_xlsx_local(invoice_data)
+    elif format_type in ('zip', 'zip1c'):
+        return export_to_zip1c(invoice_data)
     else:
         return {'success': False, 'error': 'Format necunoscut'}
-
-@app.route('/api/image/<path:filename>')
-def serve_image(filename):
-    """Servește imaginea facturii pentru preview"""
-    return send_from_directory(Config.UPLOAD_FOLDER, filename)
-
-
-@app.route('/api/exports/<path:filename>')
-def download_export(filename):
-    """Descarcă fișier exportat"""
-    return send_from_directory(export_handler.export_folder, filename)
 
 def analyze_invoice_via_azure_di(file_path: str):
     """

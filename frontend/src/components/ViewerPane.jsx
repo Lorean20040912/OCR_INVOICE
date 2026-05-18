@@ -9,14 +9,7 @@ let pdfjsLibPromise = null;
 function ensurePdfJs() {
   if (!pdfjsLibPromise) {
     const libUrl = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.mjs";
-    const workerUrl = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.mjs";
-    pdfjsLibPromise = import(/* @vite-ignore */ libUrl).then((mod) => {
-      const pdfjs = mod?.default || mod;
-      if (pdfjs && pdfjs.GlobalWorkerOptions) {
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      }
-      return pdfjs;
-    });
+    pdfjsLibPromise = import(/* @vite-ignore */ libUrl).then((mod) => mod?.default || mod);
   }
   return pdfjsLibPromise;
 }
@@ -24,6 +17,8 @@ function ensurePdfJs() {
 export default function ViewerPane({ src, filename, zoom = 1 }) {
   const canvasRef = useRef(null);
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
 
   const isPdf = useMemo(() => isPdfFile(filename || src || ""), [filename, src]);
 
@@ -32,6 +27,8 @@ export default function ViewerPane({ src, filename, zoom = 1 }) {
 
     async function renderPdf() {
       setReady(false);
+      setErr(null);
+      setLoading(true);
       try {
         const pdfjsLib = await ensurePdfJs();
         if (!pdfjsLib || !isPdf || !src || cancelled) return;
@@ -39,26 +36,57 @@ export default function ViewerPane({ src, filename, zoom = 1 }) {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Nu s-a putut inițializa canvasContext.");
 
-        const loadingTask = pdfjsLib.getDocument({ url: src, withCredentials: false });
+        // Dezactivez worker-ul pentru a evita probleme CORS/module worker în dev/proxy
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+        const loadingTask = pdfjsLib.getDocument({
+          url: src,
+          withCredentials: false,
+          disableWorker: true,
+          // @ts-ignore - pdfjs-dist acceptă signal în implementarea curentă
+          signal: controller.signal,
+        });
+
         const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: zoom || 1 });
+
+        // Scale după zoom și devicePixelRatio pentru claritate
+        const dpr = window.devicePixelRatio || 1;
+        const scale = Math.max(0.5, Math.min(zoom || 1, 2));
+        const viewport = page.getViewport({ scale: scale * dpr });
 
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
+        // Afișează în CSS la dimensiunea "logică" (fără dpr)
+        canvas.style.width = Math.floor(viewport.width / dpr) + "px";
+        canvas.style.height = Math.floor(viewport.height / dpr) + "px";
 
         const renderContext = { canvasContext: ctx, viewport };
         if (cancelled) return;
+
         await page.render(renderContext).promise;
-        if (!cancelled) setReady(true);
+        if (!cancelled) {
+          setReady(true);
+          setErr(null);
+        }
+
+        clearTimeout(timeoutId);
       } catch (e) {
-        // Dacă nu putem încărca PDF.js sau documentul, afișăm fallback
-        setReady(false);
+        if (!cancelled) {
+          setErr("PDF nu s-a putut încărca. Încearcă să descarci fișierul sau verifică accesul.");
+          setReady(false);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
 
-    if (isPdf) {
+    if (isPdf && src) {
       renderPdf();
     }
 
@@ -66,6 +94,14 @@ export default function ViewerPane({ src, filename, zoom = 1 }) {
       cancelled = true;
     };
   }, [src, isPdf, zoom]);
+
+  // Pentru imagini folosim <img> cu feedback de stare
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgErr, setImgErr] = useState(null);
+  useEffect(() => {
+    setImgLoaded(false);
+    setImgErr(null);
+  }, [src]);
 
   if (!src) {
     return (
@@ -79,25 +115,44 @@ export default function ViewerPane({ src, filename, zoom = 1 }) {
     // Randăm doar prima pagină pe canvas, fără UI sau butoane ale viewer-ului
     return (
       <div className="rounded-md border overflow-auto bg-gray-100" style={{ height: 520 }}>
-        <canvas
-          ref={canvasRef}
-          className="block"
-          style={{ display: ready ? "block" : "block" }}
-        />
-        {!ready && (
-          <div className="text-sm text-gray-500 p-3">Se încarcă previzualizarea PDF...</div>
+        <canvas ref={canvasRef} className="block max-w-full h-auto" />
+        {loading && (
+          <div className="text-sm text-gray-600 p-3">Se încarcă previzualizarea PDF...</div>
+        )}
+        {err && (
+          <div className="text-sm text-red-600 p-3">
+            {err}
+          </div>
         )}
       </div>
     );
   }
 
-  // Imagine simplă cu zoom prin transform
+  // Imagine simplă cu zoom prin transform + feedback la încărcare/eroare
   return (
     <div className="rounded-md border overflow-auto bg-gray-100" style={{ height: 520 }}>
+      {!imgLoaded && !imgErr && (
+        <div className="text-sm text-gray-600 p-3">Se încarcă imaginea...</div>
+      )}
+      {imgErr && (
+        <div className="text-sm text-red-600 p-3">
+          Nu s-a putut încărca imaginea. Verifică sursa sau încearcă din nou.
+        </div>
+      )}
       <img
         src={src}
         alt={filename || "Factura"}
-        style={{ transform: `scale(${zoom || 1})`, transformOrigin: "top left" }}
+        decoding="async"
+        loading="eager"
+        onLoad={() => setImgLoaded(true)}
+        onError={() => setImgErr(true)}
+        style={{
+          transform: `scale(${zoom || 1})`,
+          transformOrigin: "top left",
+          maxWidth: "100%",
+          height: "auto",
+          display: imgLoaded ? "block" : "none",
+        }}
         className="block"
       />
     </div>
